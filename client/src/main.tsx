@@ -5,6 +5,7 @@ import { createWorld } from 'bitecs'
 import { NetClient } from './net/ws'
 import { babylonSyncSystem } from './ecs/systems/babylonSync'
 import { netApplySystem } from './ecs/systems/netApply'
+import { interpolateSystem } from './ecs/systems/interpolate'
 
 const world = createWorld()
 const net = new NetClient()
@@ -15,7 +16,9 @@ React.useEffect(() => {
 if (ref.current) {
 const { engine, scene } = createScene(ref.current)
 const babylonSync = babylonSyncSystem(world)
+const interpolate = interpolateSystem(world, net)
 engine.runRenderLoop(() => {
+interpolate()
 babylonSync()
 scene.render()
 })

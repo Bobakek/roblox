@@ -1,7 +1,7 @@
 import { IWorld, addEntity, addComponent, removeEntity } from 'bitecs'
-import { Transform, Renderable } from '../components'
+import { Transform, Renderable, RenderTransform } from '../components'
 
-const netIdToEid = new Map<string, number>()
+export const netIdToEid = new Map<string, number>()
 
 export function netApplySystem(
   world: IWorld,
@@ -14,11 +14,15 @@ export function netApplySystem(
       eid = addEntity(world)
       addComponent(world, Transform, eid)
       addComponent(world, Renderable, eid)
+      addComponent(world, RenderTransform, eid)
       netIdToEid.set(id, eid)
     }
     Transform.x[eid] = x
     Transform.y[eid] = y
     Transform.z[eid] = z
+    RenderTransform.x[eid] = x
+    RenderTransform.y[eid] = y
+    RenderTransform.z[eid] = z
     seen.add(id)
   }
 
