@@ -25,6 +25,7 @@ type World struct {
 	inputs  chan Input
 	clients map[EntityID]chan []byte // каждому клиенту шлём снапшоты
 	nextID  EntityID
+	mirrors map[EntityID]float32 // коэффициенты для дублирования инпута игрока
 }
 
 func NewWorld() *World {
@@ -33,10 +34,24 @@ func NewWorld() *World {
 		inputs:  make(chan Input, 1024),
 		clients: map[EntityID]chan []byte{},
 		nextID:  1,
+		mirrors: map[EntityID]float32{},
 	}
-	// Для теста создадим одну сущность игрока с ID=1
+	// Создаём основного игрока с ID=1
 	w.ents[w.nextID] = &Entity{ID: w.nextID, X: 0, Y: 0, Z: 0}
+	base := w.nextID
 	w.nextID++
+
+	// Добавляем несколько дополнительных сущностей
+	coeffs := []float32{0.5, 1.5, -1, 2}
+	for _, c := range coeffs {
+		w.ents[w.nextID] = &Entity{ID: w.nextID, X: 0, Y: 0, Z: 0}
+		w.mirrors[w.nextID] = c
+		w.nextID++
+	}
+
+	// убеждаемся, что базовый ID не присутствует в mirrors
+	delete(w.mirrors, base)
+
 	return w
 }
 
@@ -68,8 +83,22 @@ func (w *World) step(dt float32) {
 	// 2) применить их к миру
 	w.mu.Lock()
 	for _, in := range batch {
-		if e, ok := w.ents[in.EID]; ok {
-			// примитивная интеграция: pos += a * dt
+		if in.EID == 1 {
+			// основной игрок управляет зеркалами
+			if e, ok := w.ents[in.EID]; ok {
+				e.X += in.AX * dt
+				e.Y += in.AY * dt
+				e.Z += in.AZ * dt
+			}
+			for id, k := range w.mirrors {
+				if e, ok := w.ents[id]; ok {
+					e.X += in.AX * dt * k
+					e.Y += in.AY * dt * k
+					e.Z += in.AZ * dt * k
+				}
+			}
+		} else if e, ok := w.ents[in.EID]; ok {
+			// обычная интеграция для прочих сущностей
 			e.X += in.AX * dt
 			e.Y += in.AY * dt
 			e.Z += in.AZ * dt
