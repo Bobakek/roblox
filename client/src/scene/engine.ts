@@ -1,12 +1,17 @@
 import { Engine, Scene, Vector3, HemisphericLight, ArcRotateCamera, MeshBuilder } from '@babylonjs/core'
 
 
+export let engine: Engine
+export let scene: Scene
+export let camera: ArcRotateCamera
+
+
 export function createScene(canvas: HTMLCanvasElement) {
-const engine = new Engine(canvas, true)
-const scene = new Scene(engine)
+engine = new Engine(canvas, true)
+scene = new Scene(engine)
 
 
-const camera = new ArcRotateCamera('cam', Math.PI / 2, Math.PI / 3, 8, Vector3.Zero(), scene)
+camera = new ArcRotateCamera('cam', Math.PI / 2, Math.PI / 3, 8, Vector3.Zero(), scene)
 camera.attachControl(canvas, true)
 
 
