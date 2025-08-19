@@ -22,6 +22,16 @@ go hub.Run()
 
 
 http.HandleFunc("/ws", hub.HandleWS)
+http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK game-server"))
+})
+
+http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("healthy"))
+})
+
 log.Println("game-server listening on :8080")
 log.Fatal(http.ListenAndServe(":8080", nil))
 }
