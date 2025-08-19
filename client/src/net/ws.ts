@@ -7,8 +7,8 @@ private ws?: WebSocket
 private connected = false
 private pending: Input[] = []
 private lastAck = 0
-private state = new Map<number, { x: number; y: number; z: number }>()
-private selfId?: number
+private state = new Map<string, { x: number; y: number; z: number }>()
+private selfId?: string
 
 
 connect(url = 'ws://localhost:8080/ws'): Promise<void> {
@@ -31,10 +31,10 @@ this.lastAck = snap.t
 // заменяем локальное состояние на серверный снапшот
 this.state.clear()
 for (const e of snap.entities) {
-this.state.set(e.id, { x: e.x, y: e.y, z: e.z })
+this.state.set(String(e.id), { x: e.x, y: e.y, z: e.z })
 }
 if (this.selfId === undefined && snap.entities.length > 0) {
-this.selfId = snap.entities[0].id
+this.selfId = String(snap.entities[0].id)
 }
 // удаляем подтверждённые инпуты
 this.pending = this.pending.filter((p) => p.t > this.lastAck)
