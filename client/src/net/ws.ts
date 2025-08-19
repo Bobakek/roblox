@@ -12,6 +12,7 @@ private selfId?: string
 private snapshots: Snapshot[] = []
 private readonly maxSnapshots = 32
 renderDelay = 100
+serverTimeDiff = 0
 
 
 connect(url = 'ws://localhost:8080/ws'): Promise<void> {
@@ -30,6 +31,7 @@ return new Promise((res, rej) => {
         this.ws.onerror = (e) => rej(e)
         this.ws.onmessage = (ev) => {
           const snap: Snapshot = JSON.parse(ev.data)
+          this.serverTimeDiff = Date.now() - snap.t
           this.snapshots.push(snap)
           if (this.snapshots.length > this.maxSnapshots) {
             this.snapshots.shift()
