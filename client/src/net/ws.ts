@@ -4,6 +4,7 @@ export type Snapshot = { t: number; entities: Array<{ id: number; x:number; y:nu
 
 export class NetClient {
 private ws?: WebSocket
+private connected = false
 private pending: Input[] = []
 private lastAck = 0
 private state = new Map<number, { x: number; y: number; z: number }>()
@@ -12,10 +13,19 @@ private selfId?: number
 
 connect(url = 'ws://localhost:8080/ws'): Promise<void> {
 return new Promise((res, rej) => {
-this.ws = new WebSocket(url)
-this.ws.onopen = () => res()
-this.ws.onerror = (e) => rej(e)
-this.ws.onmessage = (ev) => {
+        this.ws = new WebSocket(url)
+        this.ws.onopen = () => {
+            this.connected = true
+            for (const inp of this.pending) {
+                this.ws!.send(JSON.stringify({ type: 'input', data: inp }))
+            }
+            res()
+        }
+        this.ws.onclose = () => {
+            this.connected = false
+        }
+        this.ws.onerror = (e) => rej(e)
+        this.ws.onmessage = (ev) => {
 const snap: Snapshot = JSON.parse(ev.data)
 this.lastAck = snap.t
 // заменяем локальное состояние на серверный снапшот
@@ -44,9 +54,12 @@ sendInput(inp: Input) {
 // применяем инпут локально для предсказания и сохраняем
 const prevT = this.pending.length ? this.pending[this.pending.length - 1].t : this.lastAck
 const dt = (inp.t - prevT) / 1000
-this.applyInput(inp, dt)
-this.pending.push(inp)
-this.ws?.send(JSON.stringify({ type: 'input', data: inp }))
+    this.applyInput(inp, dt)
+    this.pending.push(inp)
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        return
+    }
+    this.ws.send(JSON.stringify({ type: 'input', data: inp }))
 }
 
 private applyInput(inp: Input, dt: number) {
