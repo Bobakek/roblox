@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 )
@@ -22,7 +23,7 @@ type World struct {
 	mu      sync.RWMutex
 	ents    map[EntityID]*Entity
 	inputs  chan Input
-	clients map[EntityID]chan []byte // пока не используем
+	clients map[EntityID]chan []byte // каждому клиенту шлём снапшоты
 	nextID  EntityID
 }
 
@@ -104,7 +105,62 @@ func (w *World) HasEntity(id EntityID) bool {
 	return ok
 }
 
-// TODO: сериализация снапшота и рассылка по интерес-менеджменту
+// AddClient регистрирует канал для рассылки снапшотов конкретному игроку.
+func (w *World) AddClient(id EntityID, ch chan []byte) {
+	w.mu.Lock()
+	w.clients[id] = ch
+	w.mu.Unlock()
+}
+
+// RemoveClient убирает канал клиента из рассылки.
+func (w *World) RemoveClient(id EntityID) {
+	w.mu.Lock()
+	delete(w.clients, id)
+	w.mu.Unlock()
+}
+
+type entityState struct {
+	ID EntityID `json:"id"`
+	X  float32  `json:"x"`
+	Y  float32  `json:"y"`
+	Z  float32  `json:"z"`
+}
+
+type snapshot struct {
+	T        int64         `json:"t"`
+	Entities []entityState `json:"entities"`
+}
+
+// broadcast собирает состояние всех сущностей, сериализует и
+// рассылает по каналам клиентов. Здесь можно внедрить
+// интерес-менеджмент, фильтруя Entities на клиента.
 func (w *World) broadcast() {
-	// заглушка — реализуем позже
+	w.mu.RLock()
+	snap := snapshot{T: time.Now().UnixMilli()}
+	snap.Entities = make([]entityState, 0, len(w.ents))
+	for _, e := range w.ents {
+		snap.Entities = append(snap.Entities, entityState{ID: e.ID, X: e.X, Y: e.Y, Z: e.Z})
+	}
+	chans := make([]chan []byte, 0, len(w.clients))
+	for _, ch := range w.clients {
+		chans = append(chans, ch)
+	}
+	w.mu.RUnlock()
+
+	if len(chans) == 0 {
+		return
+	}
+
+	data, err := json.Marshal(snap)
+	if err != nil {
+		return
+	}
+
+	for _, ch := range chans {
+		select {
+		case ch <- data:
+		default:
+			// дропаем если канал переполнен
+		}
+	}
 }

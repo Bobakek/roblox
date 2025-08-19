@@ -41,6 +41,24 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: auth (Nakama)
 	eid := h.world.NewEntity()
+
+	ch := make(chan []byte, 16)
+	h.world.AddClient(eid, ch)
+	defer func() {
+		h.world.RemoveClient(eid)
+		close(ch)
+	}()
+
+	go func() {
+		for msg := range ch {
+			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				log.Println("write:", err)
+				conn.Close()
+				return
+			}
+		}
+	}()
+
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
