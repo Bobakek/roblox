@@ -9,6 +9,9 @@ private pending: Input[] = []
 private lastAck = 0
 private state = new Map<string, { x: number; y: number; z: number }>()
 private selfId?: string
+private snapshots: Snapshot[] = []
+private readonly maxSnapshots = 32
+renderDelay = 100
 
 
 connect(url = 'ws://localhost:8080/ws'): Promise<void> {
@@ -26,26 +29,27 @@ return new Promise((res, rej) => {
         }
         this.ws.onerror = (e) => rej(e)
         this.ws.onmessage = (ev) => {
-const snap: Snapshot = JSON.parse(ev.data)
-this.lastAck = snap.t
-// заменяем локальное состояние на серверный снапшот
-this.state.clear()
-for (const e of snap.entities) {
-this.state.set(String(e.id), { x: e.x, y: e.y, z: e.z })
-}
-if (this.selfId === undefined && snap.entities.length > 0) {
-this.selfId = String(snap.entities[0].id)
-}
-// удаляем подтверждённые инпуты
-this.pending = this.pending.filter((p) => p.t > this.lastAck)
-// переигрываем оставшиеся инпуты поверх снапшота
-let prevT = this.lastAck
-for (const inp of this.pending) {
-const dt = (inp.t - prevT) / 1000
-this.applyInput(inp, dt)
-prevT = inp.t
-}
-}
+          const snap: Snapshot = JSON.parse(ev.data)
+          this.snapshots.push(snap)
+          if (this.snapshots.length > this.maxSnapshots) {
+            this.snapshots.shift()
+          }
+          this.lastAck = snap.t
+          this.state.clear()
+          for (const e of snap.entities) {
+            this.state.set(String(e.id), { x: e.x, y: e.y, z: e.z })
+          }
+          if (this.selfId === undefined && snap.entities.length > 0) {
+            this.selfId = String(snap.entities[0].id)
+          }
+          this.pending = this.pending.filter((p) => p.t > this.lastAck)
+          let prevT = this.lastAck
+          for (const inp of this.pending) {
+            const dt = (inp.t - prevT) / 1000
+            this.applyInput(inp, dt)
+            prevT = inp.t
+          }
+        }
 })
 }
 
@@ -69,5 +73,9 @@ if (!ent) return
 ent.x += inp.ax * dt
 ent.y += inp.ay * dt
 ent.z += inp.az * dt
+}
+
+getSnapshots() {
+return this.snapshots
 }
 }
