@@ -4,7 +4,7 @@ import { createScene } from './scene/engine'
 import { createWorld } from 'bitecs'
 import { NetClient } from './net/ws'
 import { babylonSyncSystem } from './ecs/systems/babylonSync'
-import { netApplySystem } from './ecs/systems/netApply'
+import { netApplySystem, syncEntities } from './ecs/systems/netApply'
 import { interpolateSystem } from './ecs/systems/interpolate'
 
 const world = createWorld()
@@ -25,11 +25,13 @@ scene.render()
 net.connect().then(() => {
 const ws = (net as any).ws as WebSocket
 const prev = ws.onmessage
-ws.onmessage = (ev) => {
-prev(ev)
-const snap = JSON.parse(ev.data)
-netApplySystem(world, { entities: snap.entities.map((e: any) => ({ id: e.id.toString(), x: e.x, y: e.y, z: e.z })) })
-}
+      ws.onmessage = (ev) => {
+        prev(ev)
+        const snap = JSON.parse(ev.data)
+        const formatted = { entities: snap.entities.map((e: any) => ({ id: e.id.toString(), x: e.x, y: e.y, z: e.z })) }
+        syncEntities(world, formatted)
+        netApplySystem(world, formatted)
+      }
 })
 
 const keys = { w: false, a: false, s: false, d: false }
