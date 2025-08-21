@@ -68,16 +68,23 @@ const dt = (inp.t - prevT) / 1000
     this.ws.send(JSON.stringify({ type: 'input', data: inp }))
 }
 
-private applyInput(inp: Input, dt: number) {
-if (!this.selfId) return
-const ent = this.state.get(this.selfId)
-if (!ent) return
-ent.x += inp.ax * dt
-ent.y += inp.ay * dt
-ent.z += inp.az * dt
-}
+  private applyInput(inp: Input, dt: number) {
+  if (!this.selfId) return
+  const ent = this.state.get(this.selfId)
+  if (!ent) return
+  ent.x += inp.ax * dt
+  ent.y += inp.ay * dt
+  ent.z += inp.az * dt
+  }
 
-getSnapshots() {
-return this.snapshots
-}
+  getSelfState() {
+  if (!this.selfId) return
+  const ent = this.state.get(this.selfId)
+  if (!ent) return
+  return { id: this.selfId, x: ent.x, y: ent.y, z: ent.z }
+  }
+
+  getSnapshots() {
+  return this.snapshots
+  }
 }
