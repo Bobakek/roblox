@@ -57,18 +57,25 @@ func NewWorld() *World {
 }
 
 func (w *World) Run(dt time.Duration) {
+	ticker := time.NewTicker(dt)
+	defer ticker.Stop()
+
 	last := time.Now()
 	var acc time.Duration
 	stepDt := float32(dt.Seconds())
-	for {
-		acc += time.Since(last)
-		last = time.Now()
+	for range ticker.C {
+		now := time.Now()
+		acc += now.Sub(last)
+		last = now
+
+		steps := 0
 		for acc >= dt {
 			w.step(stepDt)
 			acc -= dt
+			steps++
 		}
-		if acc < dt {
-			time.Sleep(dt - acc)
+		if steps > 1 {
+			log.Printf("world.Run tick overrun: processed %d steps", steps)
 		}
 	}
 }
