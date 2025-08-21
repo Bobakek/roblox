@@ -17,9 +17,10 @@ private readonly maxSnapshots = 32
 renderDelay = 100
 serverTimeDiff = 0
  private world?: RAPIER.World
- private rapier?: typeof RAPIER
- private body?: RAPIER.RigidBody
- private listeners: Array<(state: { id: string; x: number; y: number; z: number }) => void> = []
+  private rapier?: typeof RAPIER
+  private body?: RAPIER.RigidBody
+  private bodies = new Map<string, RAPIER.RigidBody>()
+  private listeners: Array<(state: { id: string; x: number; y: number; z: number }) => void> = []
 
  constructor() {
  getPhysicsWorld().then(({ RAPIER, world }) => {
@@ -64,25 +65,44 @@ return new Promise((res, rej) => {
           this.lastAck = snap.t
             this.state.clear()
             for (const e of snap.entities) {
-              this.state.set(String(e.id), { x: e.x, y: e.y, z: e.z })
+              const id = String(e.id)
+              this.state.set(id, { x: e.x, y: e.y, z: e.z })
             }
             if (this.selfId === undefined && snap.entities.length > 0) {
               this.selfId = String(snap.entities[0].id)
             }
-            if (this.selfId && this.world && this.rapier && !this.body) {
-              const ent = this.state.get(this.selfId)
-              if (ent) {
-                this.body = this.world.createRigidBody(
-                  this.rapier.RigidBodyDesc.dynamic().setTranslation(ent.x, ent.y, ent.z)
-                )
-                this.world.createCollider(this.rapier.ColliderDesc.cuboid(0.5, 0.5, 0.5), this.body)
+            if (this.world && this.rapier) {
+              if (this.selfId) {
+                const ent = this.state.get(this.selfId)
+                if (ent && !this.body) {
+                  this.body = this.world.createRigidBody(
+                    this.rapier.RigidBodyDesc.dynamic().setTranslation(ent.x, ent.y, ent.z)
+                  )
+                  this.world.createCollider(this.rapier.ColliderDesc.cuboid(0.5, 0.5, 0.5), this.body)
+                }
+                if (ent && this.body) {
+                  this.body.setTranslation({ x: ent.x, y: ent.y, z: ent.z }, true)
+                  this.body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+                }
               }
-            }
-            if (this.selfId && this.body) {
-              const ent = this.state.get(this.selfId)
-              if (ent) {
-                this.body.setTranslation({ x: ent.x, y: ent.y, z: ent.z }, true)
-                this.body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+              for (const [id, ent] of this.state) {
+                if (id === this.selfId) continue
+                let body = this.bodies.get(id)
+                if (!body) {
+                  body = this.world.createRigidBody(
+                    this.rapier.RigidBodyDesc.kinematicPositionBased().setTranslation(ent.x, ent.y, ent.z)
+                  )
+                  this.world.createCollider(this.rapier.ColliderDesc.cuboid(0.5, 0.5, 0.5), body)
+                  this.bodies.set(id, body)
+                } else {
+                  body.setTranslation({ x: ent.x, y: ent.y, z: ent.z }, true)
+                }
+              }
+              for (const [id, body] of this.bodies) {
+                if (!this.state.has(id)) {
+                  this.world.removeRigidBody(body)
+                  this.bodies.delete(id)
+                }
               }
             }
             this.pending = this.pending.filter((p) => p.t > this.lastAck)
@@ -114,6 +134,13 @@ const dt = (inp.t - prevT) / 1000
   const ent = this.state.get(this.selfId)
   if (!ent) return
   if (this.world && this.body) {
+    for (const [id, body] of this.bodies) {
+      const s = this.state.get(id)
+      if (s) {
+        body.setTranslation({ x: s.x, y: s.y, z: s.z }, true)
+        body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      }
+    }
     this.body.setTranslation({ x: ent.x, y: ent.y, z: ent.z }, true)
     this.body.setLinvel({ x: inp.ax, y: inp.ay, z: inp.az }, true)
     this.world.timestep = dt
