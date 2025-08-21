@@ -19,6 +19,7 @@ serverTimeDiff = 0
  private world?: RAPIER.World
  private rapier?: typeof RAPIER
  private body?: RAPIER.RigidBody
+ private listeners: Array<(state: { id: string; x: number; y: number; z: number }) => void> = []
 
  constructor() {
  getPhysicsWorld().then(({ RAPIER, world }) => {
@@ -26,6 +27,17 @@ serverTimeDiff = 0
  this.world = world
  })
  }
+
+  onLocalUpdate(cb: (state: { id: string; x: number; y: number; z: number }) => void) {
+    this.listeners.push(cb)
+  }
+
+  private emitLocalState() {
+    const state = this.getSelfState()
+    if (state) {
+      for (const cb of this.listeners) cb(state)
+    }
+  }
 
 
 connect(url = 'ws://localhost:8080/ws'): Promise<void> {
@@ -115,6 +127,7 @@ const dt = (inp.t - prevT) / 1000
     ent.y += inp.ay * dt
     ent.z += inp.az * dt
   }
+  this.emitLocalState()
   }
 
   getSelfState() {
