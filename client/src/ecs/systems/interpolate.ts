@@ -7,6 +7,7 @@ export function interpolateSystem(world: IWorld, net: NetClient) {
   return () => {
     const snaps = net.getSnapshots()
     if (snaps.length < 2) return world
+    const self = net.getSelfState()
     const serverNow = Date.now() - net.serverTimeDiff
     const renderNow = serverNow - net.renderDelay
     const last = snaps[snaps.length - 1]
@@ -15,11 +16,20 @@ export function interpolateSystem(world: IWorld, net: NetClient) {
     const max = last.t + step * 2
     if (renderNow > max) {
       for (const { id, x, y, z } of last.entities) {
+        if (self && String(id) === self.id) continue
         const eid = netIdToEid.get(String(id))
         if (eid === undefined) continue
         RenderTransform.x[eid] = x
         RenderTransform.y[eid] = y
         RenderTransform.z[eid] = z
+      }
+      if (self) {
+        const eid = netIdToEid.get(self.id)
+        if (eid !== undefined) {
+          RenderTransform.x[eid] = self.x
+          RenderTransform.y[eid] = self.y
+          RenderTransform.z[eid] = self.z
+        }
       }
       return world
     }
@@ -37,6 +47,7 @@ export function interpolateSystem(world: IWorld, net: NetClient) {
     const t = (renderNow - prev.t) / (next.t - prev.t || 1)
     const prevMap = new Map(prev.entities.map(e => [String(e.id), e]))
     for (const { id, x, y, z } of next.entities) {
+      if (self && String(id) === self.id) continue
       const eid = netIdToEid.get(String(id))
       if (eid === undefined) continue
       const p = prevMap.get(String(id))
@@ -44,6 +55,14 @@ export function interpolateSystem(world: IWorld, net: NetClient) {
       RenderTransform.x[eid] = p.x + (x - p.x) * t
       RenderTransform.y[eid] = p.y + (y - p.y) * t
       RenderTransform.z[eid] = p.z + (z - p.z) * t
+    }
+    if (self) {
+      const eid = netIdToEid.get(self.id)
+      if (eid !== undefined) {
+        RenderTransform.x[eid] = self.x
+        RenderTransform.y[eid] = self.y
+        RenderTransform.z[eid] = self.z
+      }
     }
     return world
   }
