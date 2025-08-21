@@ -67,10 +67,19 @@ func NewWorld() *World {
 }
 
 func (w *World) Run(dt time.Duration) {
-	ticker := time.NewTicker(dt)
-	defer ticker.Stop()
-	for range ticker.C {
-		w.step(float32(dt.Seconds()))
+	last := time.Now()
+	var acc time.Duration
+	stepDt := float32(dt.Seconds())
+	for {
+		acc += time.Since(last)
+		last = time.Now()
+		for acc >= dt {
+			w.step(stepDt)
+			acc -= dt
+		}
+		if acc < dt {
+			time.Sleep(dt - acc)
+		}
 	}
 }
 
