@@ -2,8 +2,19 @@ package sim
 
 import (
 	"encoding/json"
+	"log"
 	"sync"
 	"time"
+)
+
+// world bounds
+const (
+	worldMinX = -100.0
+	worldMaxX = 100.0
+	worldMinY = 0.0
+	worldMaxY = 100.0
+	worldMinZ = -100.0
+	worldMaxZ = 100.0
 )
 
 type EntityID int64
@@ -105,10 +116,29 @@ func (w *World) step(dt float32) {
 		}
 	}
 
-	// 3) (опционально) можно сделать затухание/клампинг и т.д.
-	// используем e в цикле, чтобы избежать предупреждений — но тут он реально нужен
+	// 3) клампим координаты и детектим простые столкновения с границами мира
 	for _, e := range w.ents {
-		_ = e // в этой версии мы позиции уже поменяли выше; цикл остаётся для будущих систем
+		if e.X < worldMinX {
+			e.X = worldMinX
+			log.Printf("entity %d collided with min X", e.ID)
+		} else if e.X > worldMaxX {
+			e.X = worldMaxX
+			log.Printf("entity %d collided with max X", e.ID)
+		}
+		if e.Y < worldMinY {
+			e.Y = worldMinY
+			log.Printf("entity %d collided with min Y", e.ID)
+		} else if e.Y > worldMaxY {
+			e.Y = worldMaxY
+			log.Printf("entity %d collided with max Y", e.ID)
+		}
+		if e.Z < worldMinZ {
+			e.Z = worldMinZ
+			log.Printf("entity %d collided with min Z", e.ID)
+		} else if e.Z > worldMaxZ {
+			e.Z = worldMaxZ
+			log.Printf("entity %d collided with max Z", e.ID)
+		}
 	}
 	w.mu.Unlock()
 
