@@ -10,6 +10,10 @@ import { interpolateSystem } from './ecs/systems/interpolate'
 const world = createWorld()
 const net = new NetClient()
 
+net.onLocalUpdate((state) => {
+  netApplySystem(world, { entities: [state] })
+})
+
 function App() {
 const ref = React.useRef<HTMLCanvasElement>(null)
 React.useEffect(() => {
