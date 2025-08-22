@@ -41,10 +41,17 @@ serverTimeDiff = 0
   }
 
 
-connect(url = 'ws://localhost:8080/ws'): Promise<void> {
-return new Promise((res, rej) => {
-        this.ws = new WebSocket(url)
-        this.ws.onopen = () => {
+  connect(url?: string): Promise<void> {
+    return new Promise((res, rej) => {
+      const wsUrl = (() => {
+        if (url) return url
+        const envUrl = (import.meta as any).env?.VITE_WS_URL
+        if (envUrl) return envUrl as string
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+        return `${proto}://${location.host}/ws`
+      })()
+      this.ws = new WebSocket(wsUrl)
+      this.ws.onopen = () => {
             this.connected = true
             for (const inp of this.pending) {
                 this.ws!.send(JSON.stringify({ type: 'input', data: inp }))
