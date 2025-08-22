@@ -39,10 +39,16 @@ const prev = ws.onmessage
 })
 
 const keys = { w: false, a: false, s: false, d: false }
+let lastAx = 0
+let lastAz = 0
 const send = () => {
 const ax = (keys.d ? 1 : 0) - (keys.a ? 1 : 0)
 const az = (keys.w ? 1 : 0) - (keys.s ? 1 : 0)
+if (ax !== lastAx || az !== lastAz) {
+lastAx = ax
+lastAz = az
 net.sendInput({ t: Date.now(), ax, ay: 0, az })
+}
 }
 const down = (e: KeyboardEvent) => {
 const k = e.key.toLowerCase()
