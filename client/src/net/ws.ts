@@ -48,9 +48,7 @@ serverTimeDiff = 0
         const envUrl = (import.meta as any).env?.VITE_WS_URL
         if (envUrl) return envUrl as string
         const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-        const host = location.hostname.endsWith('app.github.dev')
-          ? `8080-${location.hostname}`
-          : location.host
+        const host = location.host
         return `${proto}://${host}/ws`
       })()
       console.log(wsUrl)
