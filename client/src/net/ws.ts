@@ -6,8 +6,8 @@ export type Snapshot = { t: number; entities: Array<{ id: number; x:number; y:nu
 
 
 export class NetClient {
-private ws?: WebSocket
-private connected = false
+  private ws?: WebSocket
+  connected = false
 private pending: Input[] = []
 private lastAck = 0
 private state = new Map<string, { x: number; y: number; z: number }>()
