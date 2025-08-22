@@ -3,11 +3,13 @@ package sim
 import (
 	"encoding/json"
 	"log"
+	"sort"
 	"sync"
 	"time"
 )
 
 const defaultVisibilityRadius = float32(10.0)
+const historySize = 128
 
 type EntityID int64
 
@@ -34,19 +36,25 @@ type World struct {
 	visRadius float32
 	index     spatialIndex
 	clientPos map[EntityID][3]float32
+
+	tick         int64
+	history      map[int64]map[EntityID][3]float32
+	inputHistory map[int64][]Input
 }
 
 func NewWorld() *World {
 	w := &World{
-		ents:      map[EntityID]*Entity{},
-		inputs:    make(chan Input, 1024),
-		clients:   map[EntityID]chan []byte{},
-		users:     map[EntityID]string{},
-		nextID:    1,
-		mirrors:   map[EntityID]float32{},
-		visRadius: defaultVisibilityRadius,
-		index:     newSpatialIndex(defaultVisibilityRadius),
-		clientPos: map[EntityID][3]float32{},
+		ents:         map[EntityID]*Entity{},
+		inputs:       make(chan Input, 1024),
+		clients:      map[EntityID]chan []byte{},
+		users:        map[EntityID]string{},
+		nextID:       1,
+		mirrors:      map[EntityID]float32{},
+		visRadius:    defaultVisibilityRadius,
+		index:        newSpatialIndex(defaultVisibilityRadius),
+		clientPos:    map[EntityID][3]float32{},
+		history:      map[int64]map[EntityID][3]float32{},
+		inputHistory: map[int64][]Input{},
 	}
 	// Создаём основного игрока с ID=1
 	w.ents[w.nextID] = &Entity{ID: w.nextID, X: 0, Y: 0, Z: 0}
@@ -114,38 +122,46 @@ func (w *World) drainInputs() []Input {
 	}
 }
 
-func (w *World) step(dt float32) {
-	start := time.Now()
-
-	// 1) собрать все инпуты тика
-	batch := w.drainInputs()
-
-	// 2) применить их к миру
-	w.mu.Lock()
-	for _, in := range batch {
-		if in.EID == 1 {
-			// основной игрок управляет зеркалами
-			if e, ok := w.ents[in.EID]; ok {
-				e.X += in.AX * dt
-				e.Y += in.AY * dt
-				e.Z += in.AZ * dt
+func (w *World) recordSnapshot(t int64) {
+	snap := make(map[EntityID][3]float32, len(w.ents))
+	for id, e := range w.ents {
+		snap[id] = [3]float32{e.X, e.Y, e.Z}
+	}
+	w.history[t] = snap
+	if len(w.history) > historySize {
+		oldest := t
+		for k := range w.history {
+			if k < oldest {
+				oldest = k
 			}
-			for id, k := range w.mirrors {
-				if e, ok := w.ents[id]; ok {
-					e.X += in.AX * dt * k
-					e.Y += in.AY * dt * k
-					e.Z += in.AZ * dt * k
-				}
-			}
-		} else if e, ok := w.ents[in.EID]; ok {
-			// обычная интеграция для прочих сущностей
+		}
+		delete(w.history, oldest)
+		delete(w.inputHistory, oldest)
+	}
+}
+
+func (w *World) applyInput(in Input, dt float32) {
+	if in.EID == 1 {
+		if e, ok := w.ents[in.EID]; ok {
 			e.X += in.AX * dt
 			e.Y += in.AY * dt
 			e.Z += in.AZ * dt
 		}
+		for id, k := range w.mirrors {
+			if e, ok := w.ents[id]; ok {
+				e.X += in.AX * dt * k
+				e.Y += in.AY * dt * k
+				e.Z += in.AZ * dt * k
+			}
+		}
+	} else if e, ok := w.ents[in.EID]; ok {
+		e.X += in.AX * dt
+		e.Y += in.AY * dt
+		e.Z += in.AZ * dt
 	}
+}
 
-	// 3) клампим координаты и детектим простые столкновения с границами мира
+func (w *World) clampEntities() {
 	for _, e := range w.ents {
 		if e.X < worldMinX {
 			e.X = worldMinX
@@ -169,8 +185,71 @@ func (w *World) step(dt float32) {
 			log.Printf("entity %d collided with max Z", e.ID)
 		}
 	}
+}
+
+func (w *World) rollback(in Input, dt float32) {
+	snap, ok := w.history[in.T]
+	if !ok {
+		return
+	}
+	for id, pos := range snap {
+		if e, ok := w.ents[id]; ok {
+			e.X, e.Y, e.Z = pos[0], pos[1], pos[2]
+		}
+	}
+
+	inputs := w.inputHistory[in.T]
+	replaced := false
+	for i, old := range inputs {
+		if old.EID == in.EID {
+			inputs[i] = in
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		inputs = append(inputs, in)
+	}
+	w.inputHistory[in.T] = inputs
+
+	for t := in.T; t < w.tick; t++ {
+		for _, inp := range w.inputHistory[t] {
+			w.applyInput(inp, dt)
+		}
+		w.clampEntities()
+		w.recordSnapshot(t + 1)
+	}
+}
+
+func (w *World) step(dt float32) {
+	start := time.Now()
+
+	// 1) собрать все инпуты тика
+	batch := w.drainInputs()
+	sort.Slice(batch, func(i, j int) bool { return batch[i].T < batch[j].T })
+
+	// 2) применить их к миру с учётом откатов
+	w.mu.Lock()
+	if _, ok := w.history[w.tick]; !ok {
+		w.recordSnapshot(w.tick)
+	}
+	for _, in := range batch {
+		if in.T == 0 {
+			in.T = w.tick
+		}
+		if in.T < w.tick {
+			w.rollback(in, dt)
+		} else {
+			w.applyInput(in, dt)
+			w.inputHistory[in.T] = append(w.inputHistory[in.T], in)
+		}
+	}
+
+	// 3) клампим координаты и детектим простые столкновения с границами мира
+	w.clampEntities()
 
 	w.rebuildIndex()
+	w.recordSnapshot(w.tick + 1)
 	w.mu.Unlock()
 
 	processDur := time.Since(start)
@@ -189,6 +268,8 @@ func (w *World) step(dt float32) {
 	if processDur+broadcastDur > dtDur {
 		log.Printf("world.step total overrun: %v", processDur+broadcastDur)
 	}
+
+	w.tick++
 }
 
 func (w *World) ApplyInput(in Input) { w.inputs <- in }
