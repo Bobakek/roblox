@@ -48,7 +48,10 @@ serverTimeDiff = 0
         const envUrl = (import.meta as any).env?.VITE_WS_URL
         if (envUrl) return envUrl as string
         const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-        return `${proto}://${location.host}/ws`
+        const host = location.hostname.endsWith('app.github.dev')
+          ? `8080-${location.hostname}`
+          : location.host
+        return `${proto}://${host}/ws`
       })()
       this.ws = new WebSocket(wsUrl)
       this.ws.onopen = () => {
