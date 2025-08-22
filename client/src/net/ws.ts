@@ -82,6 +82,8 @@ serverTimeDiff = 0
             if (this.selfId === undefined && snap.entities.length > 0) {
               this.selfId = String(snap.entities[0].id)
             }
+            const serverSelf = this.selfId ?
+              ({ ...this.state.get(this.selfId)! }) : undefined
             if (this.world && this.rapier) {
               if (this.selfId) {
                 const ent = this.state.get(this.selfId)
@@ -120,9 +122,28 @@ serverTimeDiff = 0
             let prevT = this.lastAck
             for (const inp of this.pending) {
               const dt = (inp.t - prevT) / 1000
-              this.applyInput(inp, dt)
-            prevT = inp.t
-          }
+              this.applyInput(inp, dt, true)
+              prevT = inp.t
+            }
+            if (serverSelf && this.selfId) {
+              const ent = this.state.get(this.selfId)!
+              const dx = ent.x - serverSelf.x
+              const dy = ent.y - serverSelf.y
+              const dz = ent.z - serverSelf.z
+              const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+              if (dist > 0.5) {
+                const alpha = 0.5
+                ent.x += (serverSelf.x - ent.x) * alpha
+                ent.y += (serverSelf.y - ent.y) * alpha
+                ent.z += (serverSelf.z - ent.z) * alpha
+                if (this.body) {
+                  this.body.setTranslation({ x: ent.x, y: ent.y, z: ent.z }, true)
+                  this.body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+                }
+                this.pending = []
+              }
+            }
+            this.emitLocalState()
         }
 })
 }
@@ -140,17 +161,20 @@ const dt = (inp.t - prevT) / 1000
     this.ws.send(JSON.stringify({ type: 'input', data: inp }))
 }
 
-  private applyInput(inp: Input, dt: number) {
+  private applyInput(inp: Input, dt: number, reconciling = false) {
   if (!this.selfId) return
   const ent = this.state.get(this.selfId)
   if (!ent) return
   if (this.world && this.body) {
-    for (const [id, body] of this.bodies) {
-      const s = this.state.get(id)
-      if (s) {
-        body.setTranslation({ x: s.x, y: s.y, z: s.z }, true)
-        body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+    if (reconciling) {
+      for (const [id, body] of this.bodies) {
+        const s = this.state.get(id)
+        if (s) {
+          body.setTranslation({ x: s.x, y: s.y, z: s.z }, true)
+          body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+        }
       }
+      this.body.setLinvel({ x: 0, y: 0, z: 0 }, true)
     }
     this.body.setTranslation({ x: ent.x, y: ent.y, z: ent.z }, true)
     this.body.setLinvel({ x: inp.ax, y: inp.ay, z: inp.az }, true)
@@ -165,7 +189,9 @@ const dt = (inp.t - prevT) / 1000
     ent.y += inp.ay * dt
     ent.z += inp.az * dt
   }
-  this.emitLocalState()
+  if (!reconciling) {
+    this.emitLocalState()
+  }
   }
 
   getSelfState() {
