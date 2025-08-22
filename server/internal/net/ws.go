@@ -37,7 +37,11 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 		log.Println("upgrade:", err)
 		return
 	}
-	defer conn.Close()
+	log.Println("client connected:", conn.RemoteAddr())
+	defer func() {
+		log.Println("client disconnected:", conn.RemoteAddr())
+		conn.Close()
+	}()
 
 	// TODO: auth (Nakama)
 	eid := h.world.NewEntity()
