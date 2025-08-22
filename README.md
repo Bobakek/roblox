@@ -433,33 +433,36 @@ export type SandboxAPI = {
 }
 
 // Прокси к движку, предоставляемый воркеру
-export const createSandboxAPI = (): SandboxAPI => {
+export const createSandbox = (): Sandbox => {
   const listeners: Record<string, Function[]> = { tick: [], enter: [], leave: [] }
-  return {
+  const api: SandboxAPI = {
     on(ev, cb) { (listeners[ev] ||= []).push(cb) },
-    spawn(name, opts) { postMessage({ type: 'spawn', name, opts }); return Math.floor(Math.random()*1e9) },
-    setPosition(id, x,y,z) { postMessage({ type: 'setPosition', id, x, y, z }) },
+    spawn(name, opts) {
+      postMessage({ type: 'spawn', name, opts })
+      return Math.floor(Math.random() * 1e9)
+    },
+    setPosition(id, x, y, z) { postMessage({ type: 'setPosition', id, x, y, z }) },
     getTime() { return performance.now() }
   }
+  // ...
+  return { api, emit, sandbox, reset }
 }
 ```
 
 ### `client/src/sandbox/worker.ts`
 
 ```ts
-import { createSandboxAPI } from './api'
+import { createSandbox } from './api'
 
-const api = createSandboxAPI()
-
-// Пример UGC-скрипта (будет заменён загрузчиком пользовательского кода)
-api.on('tick', () => {
-  // dev-скрипт: крутим объект
-})
+const { sandbox, emit, reset } = createSandbox()
+const api = (sandbox as any).api
 
 self.onmessage = (ev) => {
   const msg = ev.data
-  if (msg.type === 'tick') {
-    // вызывать обработчики
+  if (msg.type === 'load') {
+    // загрузка пользовательского кода
+  } else if (msg.type === 'tick') {
+    // обработка событий
   }
 }
 ```
