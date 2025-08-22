@@ -14,6 +14,40 @@ net.onLocalUpdate((state) => {
   netApplySystem(world, { entities: [state] })
 })
 
+function DebugHUD() {
+  const [state, setState] = React.useState({
+    self: net.getSelfState(),
+    connected: net.connected,
+  })
+
+  React.useEffect(() => {
+    let frame: number
+    const update = () => {
+      setState({ self: net.getSelfState(), connected: net.connected })
+      frame = requestAnimationFrame(update)
+    }
+    frame = requestAnimationFrame(update)
+    return () => cancelAnimationFrame(frame)
+  }, [])
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        color: 'white',
+        background: 'rgba(0,0,0,0.5)',
+        padding: 4,
+        fontFamily: 'monospace',
+      }}
+    >
+      <div>connected: {String(state.connected)}</div>
+      <div>self: {state.self ? JSON.stringify(state.self) : 'null'}</div>
+    </div>
+  )
+}
+
 function App() {
 const ref = React.useRef<HTMLCanvasElement>(null)
 React.useEffect(() => {
@@ -72,7 +106,12 @@ window.removeEventListener('keyup', up)
 }
 }
 }, [])
-return <canvas ref={ref} style={{ width: '100vw', height: '100vh', display: 'block' }} />
+return (
+  <>
+    <canvas ref={ref} style={{ width: '100vw', height: '100vh', display: 'block' }} />
+    <DebugHUD />
+  </>
+)
 }
 
 createRoot(document.getElementById('root')!).render(<App />)
