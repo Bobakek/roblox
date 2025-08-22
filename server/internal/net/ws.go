@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"mmo-ugc/server/internal/auth"
 	"mmo-ugc/server/internal/sim"
 )
 
@@ -32,7 +33,22 @@ type input struct {
 }
 
 func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	token := r.Header.Get("Sec-WebSocket-Protocol")
+	if token == "" {
+		token = r.URL.Query().Get("token")
+	}
+	userID, err := auth.ValidateToken(token)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var respHeader http.Header
+	if r.Header.Get("Sec-WebSocket-Protocol") != "" {
+		respHeader = http.Header{}
+		respHeader.Set("Sec-WebSocket-Protocol", token)
+	}
+	conn, err := upgrader.Upgrade(w, r, respHeader)
 	if err != nil {
 		log.Println("upgrade:", err)
 		return
@@ -43,13 +59,14 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 		conn.Close()
 	}()
 
-	// TODO: auth (Nakama)
 	eid := h.world.NewEntity()
+	h.world.BindUser(eid, userID)
 
 	ch := make(chan []byte, 16)
 	h.world.AddClient(eid, ch)
 	defer func() {
 		h.world.RemoveClient(eid)
+		h.world.UnbindUser(eid)
 		close(ch)
 	}()
 
