@@ -53,6 +53,7 @@ serverTimeDiff = 0
           : location.host
         return `${proto}://${host}/ws`
       })()
+      console.log(wsUrl)
       this.ws = new WebSocket(wsUrl)
       this.ws.onopen = () => {
             this.connected = true
