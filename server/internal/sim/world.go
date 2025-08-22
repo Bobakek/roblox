@@ -27,6 +27,7 @@ type World struct {
 	ents    map[EntityID]*Entity
 	inputs  chan Input
 	clients map[EntityID]chan []byte // каждому клиенту шлём снапшоты
+	users   map[EntityID]string      // соответствие EntityID -> userID
 	nextID  EntityID
 	mirrors map[EntityID]float32 // коэффициенты для дублирования инпута игрока
 
@@ -40,6 +41,7 @@ func NewWorld() *World {
 		ents:      map[EntityID]*Entity{},
 		inputs:    make(chan Input, 1024),
 		clients:   map[EntityID]chan []byte{},
+		users:     map[EntityID]string{},
 		nextID:    1,
 		mirrors:   map[EntityID]float32{},
 		visRadius: defaultVisibilityRadius,
@@ -198,6 +200,20 @@ func (w *World) NewEntity() EntityID {
 	w.ents[id] = &Entity{ID: id, X: 0, Y: 0, Z: 0}
 	w.mu.Unlock()
 	return id
+}
+
+// BindUser связывает EntityID с userID.
+func (w *World) BindUser(id EntityID, userID string) {
+	w.mu.Lock()
+	w.users[id] = userID
+	w.mu.Unlock()
+}
+
+// UnbindUser удаляет связь EntityID и userID.
+func (w *World) UnbindUser(id EntityID) {
+	w.mu.Lock()
+	delete(w.users, id)
+	w.mu.Unlock()
 }
 
 func (w *World) HasEntity(id EntityID) bool {
