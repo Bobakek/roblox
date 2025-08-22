@@ -1,6 +1,7 @@
 import { loadRapier } from './rapier'
 
-const worldReady = loadRapier().then(RAPIER => {
+const worldReady = (async () => {
+  const RAPIER = await loadRapier()
   const world = new RAPIER.World({ x: 0, y: 0, z: 0 })
   const minX = -100, maxX = 100
   const minY = 0, maxY = 100
@@ -36,9 +37,8 @@ const worldReady = loadRapier().then(RAPIER => {
     world.createRigidBody(RAPIER.RigidBodyDesc.fixed())
   )
   return { RAPIER, world }
-})
+})()
 
 export function getPhysicsWorld() {
   return worldReady
 }
-
