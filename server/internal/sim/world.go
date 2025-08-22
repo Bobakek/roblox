@@ -57,25 +57,35 @@ func NewWorld() *World {
 }
 
 func (w *World) Run(dt time.Duration) {
-	ticker := time.NewTicker(dt)
-	defer ticker.Stop()
-
 	last := time.Now()
 	var acc time.Duration
 	stepDt := float32(dt.Seconds())
-	for range ticker.C {
-		now := time.Now()
-		acc += now.Sub(last)
-		last = now
+
+	var lastOverrunLog time.Time
+
+	for {
+		acc += time.Since(last)
+		last = time.Now()
 
 		steps := 0
 		for acc >= dt {
+			iterStart := time.Now()
 			w.step(stepDt)
+			elapsed := time.Since(iterStart)
+			if elapsed > dt && (lastOverrunLog.IsZero() || time.Since(lastOverrunLog) > time.Second) {
+				log.Printf("world.Run iteration overrun: %v", elapsed)
+				lastOverrunLog = time.Now()
+			}
 			acc -= dt
 			steps++
 		}
-		if steps > 1 {
+		if steps > 1 && (lastOverrunLog.IsZero() || time.Since(lastOverrunLog) > time.Second) {
 			log.Printf("world.Run tick overrun: processed %d steps", steps)
+			lastOverrunLog = time.Now()
+		}
+
+		if acc > 0 {
+			time.Sleep(dt - acc)
 		}
 	}
 }
@@ -94,6 +104,8 @@ func (w *World) drainInputs() []Input {
 }
 
 func (w *World) step(dt float32) {
+	start := time.Now()
+
 	// 1) собрать все инпуты тика
 	batch := w.drainInputs()
 
@@ -148,8 +160,22 @@ func (w *World) step(dt float32) {
 	}
 	w.mu.Unlock()
 
+	processDur := time.Since(start)
+	startBroadcast := time.Now()
 	// 4) разослать снапшот (заглушка)
 	w.broadcast()
+	broadcastDur := time.Since(startBroadcast)
+
+	dtDur := time.Duration(float64(dt) * float64(time.Second))
+	if processDur > dtDur {
+		log.Printf("world.step processing overrun: %v", processDur)
+	}
+	if broadcastDur > dtDur {
+		log.Printf("world.broadcast overrun: %v", broadcastDur)
+	}
+	if processDur+broadcastDur > dtDur {
+		log.Printf("world.step total overrun: %v", processDur+broadcastDur)
+	}
 }
 
 func (w *World) ApplyInput(in Input) { w.inputs <- in }
