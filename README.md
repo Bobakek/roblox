@@ -571,6 +571,16 @@ wait
 4. `make client` — открыть `http://localhost:5173`.
 5. В `client/src/net/ws.ts` укажи адрес WS сервера при необходимости.
 
+### Codespaces WebSocket URL
+
+When running in GitHub Codespaces the WebSocket host **must** use the port prefix format:
+
+```
+VITE_WS_URL=wss://8080-<codespace>.app.github.dev/ws
+```
+
+Open the **Ports** tab in your Codespace and ensure port `8080` is set to **Public** before connecting.
+
 ---
 
 ## 7) Куда расширять дальше (чек-лист)

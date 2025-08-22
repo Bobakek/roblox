@@ -43,7 +43,7 @@ serverTimeDiff = 0
 
   connect(url?: string): Promise<void> {
     return new Promise((res, rej) => {
-      const wsUrl = (() => {
+      let wsUrl = (() => {
         if (url) return url
         const envUrl = (import.meta as any).env?.VITE_WS_URL
         if (envUrl) return envUrl as string
@@ -53,6 +53,19 @@ serverTimeDiff = 0
           : location.host
         return `${proto}://${host}/ws`
       })()
+
+      if (location.hostname.endsWith('app.github.dev')) {
+        try {
+          const parsed = new URL(wsUrl)
+          const match = parsed.hostname.match(/^(.*)-8080\.app\.github\.dev$/)
+          if (match) {
+            parsed.hostname = `8080-${match[1]}.app.github.dev`
+            wsUrl = parsed.toString()
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       const token =
         (import.meta as any).env?.VITE_WS_TOKEN ??
         new URLSearchParams(location.search).get('token')
