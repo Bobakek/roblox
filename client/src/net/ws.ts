@@ -53,8 +53,11 @@ serverTimeDiff = 0
           : location.host
         return `${proto}://${host}/ws`
       })()
+      const token =
+        (import.meta as any).env?.VITE_WS_TOKEN ??
+        new URLSearchParams(location.search).get('token')
       console.log(wsUrl)
-      this.ws = new WebSocket(wsUrl)
+      this.ws = token ? new WebSocket(wsUrl, token) : new WebSocket(wsUrl)
       this.ws.onopen = () => {
             this.connected = true
             for (const inp of this.pending) {
