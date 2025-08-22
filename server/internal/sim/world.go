@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const defaultVisibilityRadius = float32(10.0)
+
 type EntityID int64
 
 type Entity struct {
@@ -27,15 +29,22 @@ type World struct {
 	clients map[EntityID]chan []byte // каждому клиенту шлём снапшоты
 	nextID  EntityID
 	mirrors map[EntityID]float32 // коэффициенты для дублирования инпута игрока
+
+	visRadius float32
+	index     spatialIndex
+	clientPos map[EntityID][3]float32
 }
 
 func NewWorld() *World {
 	w := &World{
-		ents:    map[EntityID]*Entity{},
-		inputs:  make(chan Input, 1024),
-		clients: map[EntityID]chan []byte{},
-		nextID:  1,
-		mirrors: map[EntityID]float32{},
+		ents:      map[EntityID]*Entity{},
+		inputs:    make(chan Input, 1024),
+		clients:   map[EntityID]chan []byte{},
+		nextID:    1,
+		mirrors:   map[EntityID]float32{},
+		visRadius: defaultVisibilityRadius,
+		index:     newSpatialIndex(defaultVisibilityRadius),
+		clientPos: map[EntityID][3]float32{},
 	}
 	// Создаём основного игрока с ID=1
 	w.ents[w.nextID] = &Entity{ID: w.nextID, X: 0, Y: 0, Z: 0}
@@ -158,6 +167,8 @@ func (w *World) step(dt float32) {
 			log.Printf("entity %d collided with max Z", e.ID)
 		}
 	}
+
+	w.rebuildIndex()
 	w.mu.Unlock()
 
 	processDur := time.Since(start)
@@ -210,6 +221,19 @@ func (w *World) RemoveClient(id EntityID) {
 	w.mu.Unlock()
 }
 
+func (w *World) rebuildIndex() {
+	if w.index.cellSize == 0 {
+		w.index = newSpatialIndex(w.visRadius)
+	}
+	w.index.rebuild(w.ents)
+	w.clientPos = make(map[EntityID][3]float32, len(w.clients))
+	for id := range w.clients {
+		if e, ok := w.ents[id]; ok {
+			w.clientPos[id] = [3]float32{e.X, e.Y, e.Z}
+		}
+	}
+}
+
 type entityState struct {
 	ID EntityID `json:"id"`
 	X  float32  `json:"x"`
@@ -227,31 +251,44 @@ type snapshot struct {
 // интерес-менеджмент, фильтруя Entities на клиента.
 func (w *World) broadcast() {
 	w.mu.RLock()
-	snap := snapshot{T: time.Now().UnixMilli()}
-	snap.Entities = make([]entityState, 0, len(w.ents))
-	for _, e := range w.ents {
-		snap.Entities = append(snap.Entities, entityState{ID: e.ID, X: e.X, Y: e.Y, Z: e.Z})
+	ents := w.ents
+	idx := w.index
+	radius := w.visRadius
+	clients := make(map[EntityID]chan []byte, len(w.clients))
+	for id, ch := range w.clients {
+		clients[id] = ch
 	}
-	chans := make([]chan []byte, 0, len(w.clients))
-	for _, ch := range w.clients {
-		chans = append(chans, ch)
+	positions := make(map[EntityID][3]float32, len(w.clientPos))
+	for id, p := range w.clientPos {
+		positions[id] = p
 	}
 	w.mu.RUnlock()
 
-	if len(chans) == 0 {
-		return
-	}
-
-	data, err := json.Marshal(snap)
-	if err != nil {
-		return
-	}
-
-	for _, ch := range chans {
+	for id, ch := range clients {
+		pos, ok := positions[id]
+		if !ok {
+			continue
+		}
+		candidates := idx.query(pos[0], pos[2], radius)
+		snap := snapshot{T: time.Now().UnixMilli()}
+		snap.Entities = make([]entityState, 0, len(candidates))
+		for _, eid := range candidates {
+			if e, ok := ents[eid]; ok {
+				dx := e.X - pos[0]
+				dy := e.Y - pos[1]
+				dz := e.Z - pos[2]
+				if dx*dx+dy*dy+dz*dz <= radius*radius {
+					snap.Entities = append(snap.Entities, entityState{ID: e.ID, X: e.X, Y: e.Y, Z: e.Z})
+				}
+			}
+		}
+		data, err := json.Marshal(snap)
+		if err != nil {
+			continue
+		}
 		select {
 		case ch <- data:
 		default:
-			// дропаем если канал переполнен
 		}
 	}
 }

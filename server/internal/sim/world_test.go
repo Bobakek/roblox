@@ -1,6 +1,9 @@
 package sim
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestWorldClampsEntities(t *testing.T) {
 	w := NewWorld()
@@ -23,4 +26,36 @@ func TestWorldClampsEntities(t *testing.T) {
 		t.Fatalf("entity exceeded min bounds: %+v", e)
 	}
 	w.mu.RUnlock()
+}
+
+func TestBroadcastFiltersEntitiesByRadius(t *testing.T) {
+	w := NewWorld()
+	ch := make(chan []byte, 1)
+	w.AddClient(1, ch)
+
+	w.mu.Lock()
+	idNear := w.nextID
+	w.nextID++
+	w.ents[idNear] = &Entity{ID: idNear, X: 1, Y: 0, Z: 1}
+
+	idFar := w.nextID
+	w.nextID++
+	w.ents[idFar] = &Entity{ID: idFar, X: 100, Y: 0, Z: 100}
+	w.rebuildIndex()
+	w.mu.Unlock()
+
+	w.broadcast()
+
+	data := <-ch
+	var snap snapshot
+	if err := json.Unmarshal(data, &snap); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	ids := map[EntityID]bool{}
+	for _, e := range snap.Entities {
+		ids[e.ID] = true
+	}
+	if !ids[1] || !ids[idNear] || ids[idFar] {
+		t.Fatalf("visibility filtering failed: %+v", snap.Entities)
+	}
 }
