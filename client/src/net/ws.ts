@@ -78,10 +78,11 @@ serverTimeDiff = 0
             }
             res()
         }
-        this.ws.onclose = () => {
+        this.ws.onclose = (e) => {
+            console.log(e.code, e.reason)
             this.connected = false
         }
-        this.ws.onerror = (e) => rej(e)
+        this.ws.onerror = (e) => { console.error(e); rej(e) }
         this.ws.onmessage = (ev) => {
           const snap: Snapshot = JSON.parse(ev.data)
           this.serverTimeDiff = Date.now() - snap.t
