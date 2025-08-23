@@ -39,6 +39,7 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, err := auth.ValidateToken(token)
 	if err != nil {
+		log.Println("unauthorized", r.RemoteAddr)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
