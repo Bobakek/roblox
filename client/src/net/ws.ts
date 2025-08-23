@@ -69,8 +69,15 @@ serverTimeDiff = 0
       const token =
         (import.meta as any).env?.VITE_WS_TOKEN ??
         new URLSearchParams(location.search).get('token')
+      if (!token) {
+        console.warn(
+          'не указан токен; соединение не будет установлено'
+        )
+        rej(new Error('missing token'))
+        return
+      }
       console.log(wsUrl)
-      this.ws = token ? new WebSocket(wsUrl, token) : new WebSocket(wsUrl)
+      this.ws = new WebSocket(wsUrl, token)
       this.ws.onopen = () => {
             this.connected = true
             for (const inp of this.pending) {
@@ -79,6 +86,9 @@ serverTimeDiff = 0
             res()
         }
         this.ws.onclose = (e) => {
+            if (e.code === 1006) {
+              console.error('соединение отклонено; проверьте токен или доступность сервера')
+            }
             console.log(e.code, e.reason)
             this.connected = false
         }
