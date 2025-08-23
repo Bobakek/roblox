@@ -88,6 +88,7 @@ serverTimeDiff = 0
         this.ws.onclose = (e) => {
             if (e.code === 1006) {
               console.error('соединение отклонено; проверьте токен или доступность сервера')
+              console.error('401 Unauthorized: проверьте, что VITE_WS_TOKEN совпадает с серверным')
             }
             console.log(e.code, e.reason)
             this.connected = false
